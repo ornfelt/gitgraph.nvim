@@ -332,8 +332,8 @@ function M.apply_buffer_mappings(buf_id, graph, hooks)
 
     if from_commit and to_commit then
       -- hooks.on_select_range_commit(from_commit, to_commit)
-      vim.notify('DiffviewOpen ' .. from.hash .. '~1..' .. to.hash)
-      vim.cmd(':DiffviewOpen ' .. from.hash .. '~1..' .. to.hash)
+      vim.notify('DiffviewOpen ' .. from_commit.hash .. '~1..' .. to_commit.hash)
+      vim.cmd(':DiffviewOpen ' .. from_commit.hash .. '~1..' .. to_commit.hash)
     end
   end, { buffer = buf_id, desc = 'select range of commit' })
 end
