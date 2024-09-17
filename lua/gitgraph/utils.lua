@@ -314,7 +314,9 @@ function M.apply_buffer_mappings(buf_id, graph, hooks)
     local row = vim.api.nvim_win_get_cursor(0)[1]
     local commit = M.get_commit_from_row(graph, row)
     if commit then
-      hooks.on_select_commit(commit)
+      -- hooks.on_select_commit(commit)
+      vim.notify('DiffviewOpen ' .. commit.hash .. '^!')
+      vim.cmd(':DiffviewOpen ' .. commit.hash .. '^!')
     end
   end, { buffer = buf_id, desc = 'select commit under cursor' })
 
@@ -329,7 +331,9 @@ function M.apply_buffer_mappings(buf_id, graph, hooks)
     local from_commit = M.get_commit_from_row(graph, end_row)
 
     if from_commit and to_commit then
-      hooks.on_select_range_commit(from_commit, to_commit)
+      -- hooks.on_select_range_commit(from_commit, to_commit)
+      vim.notify('DiffviewOpen ' .. from.hash .. '~1..' .. to.hash)
+      vim.cmd(':DiffviewOpen ' .. from.hash .. '~1..' .. to.hash)
     end
   end, { buffer = buf_id, desc = 'select range of commit' })
 end
