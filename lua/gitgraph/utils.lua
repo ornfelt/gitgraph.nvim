@@ -309,14 +309,28 @@ end
 ---@param buf_id integer
 ---@param graph I.Row[]
 ---@param hooks I.Hooks
-function M.apply_buffer_mappings(buf_id, graph, hooks)
+---@param root string -- repo toplevel the graph was drawn from
+function M.apply_buffer_mappings(buf_id, graph, hooks, root)
+  -- diffview finds the repo from the cwd, which may have moved since the draw
+  -- (autochdir): open it from the graph's repo root, then go back. Not -C: diffview
+  -- runs expand() on that path, which eats a "$name" in it
+  local function diffview_open(rev)
+    vim.notify('DiffviewOpen ' .. rev)
+    local prev_cwd = vim.fn.getcwd()
+    vim.fn.chdir(root)
+    local ok, err = pcall(require('diffview').open, { rev })
+    vim.fn.chdir(prev_cwd)
+    if not ok then
+      vim.notify(tostring(err), vim.log.levels.ERROR)
+    end
+  end
+
   vim.keymap.set('n', '<CR>', function()
     local row = vim.api.nvim_win_get_cursor(0)[1]
     local commit = M.get_commit_from_row(graph, row)
     if commit then
       -- hooks.on_select_commit(commit)
-      vim.notify('DiffviewOpen ' .. commit.hash .. '^!')
-      vim.cmd(':DiffviewOpen ' .. commit.hash .. '^!')
+      diffview_open(commit.hash .. '^!')
     end
   end, { buffer = buf_id, desc = 'select commit under cursor' })
 
@@ -332,10 +346,38 @@ function M.apply_buffer_mappings(buf_id, graph, hooks)
 
     if from_commit and to_commit then
       -- hooks.on_select_range_commit(from_commit, to_commit)
-      vim.notify('DiffviewOpen ' .. from_commit.hash .. '~1..' .. to_commit.hash)
-      vim.cmd(':DiffviewOpen ' .. from_commit.hash .. '~1..' .. to_commit.hash)
+      diffview_open(from_commit.hash .. '~1..' .. to_commit.hash)
     end
   end, { buffer = buf_id, desc = 'select range of commit' })
+end
+
+--- Runs git with an argv list - no shell in between. io.popen goes through
+--- cmd.exe on Windows, and cmd.exe can't start in a UNC cwd (\\server\share\...):
+--- it falls back to C:\Windows, so every git call there failed.
+---@param git_cmd string -- config.git_cmd, may hold extra args ("git -c x=y")
+---@param args string[]
+---@return boolean ok -- exit code == 0
+---@return string stdout
+---@return string stderr
+function M.git(git_cmd, args)
+  local argv = vim.split(vim.trim(git_cmd), '%s+')
+  vim.list_extend(argv, args)
+
+  if vim.system then
+    local ok, res = pcall(function()
+      return vim.system(argv):wait()
+    end)
+    if not ok then
+      return false, '', tostring(res)
+    end
+    return res.code == 0, res.stdout or '', res.stderr or ''
+  end
+
+  -- nvim < 0.10: system() with a list skips the shell too, but it turns NUL
+  -- into SOH and mixes stderr into the output
+  local out = vim.fn.system(argv):gsub('\1', '\0')
+  local ok = vim.v.shell_error == 0
+  return ok, ok and out or '', ok and '' or out
 end
 
 ---@param cmd string

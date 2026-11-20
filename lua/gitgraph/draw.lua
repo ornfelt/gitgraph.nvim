@@ -12,15 +12,20 @@ function M.draw(config, options, args)
 
   local so = os.clock()
 
-  if utils.check_cmd('git --version') then
+  if vim.fn.executable(vim.split(vim.trim(config.git_cmd), '%s+')[1]) == 0 then
     log.error('git command not found, please install it')
     return
   end
 
-  if utils.check_cmd('git status') then
-    log.error('does not seem to be a valid git repo')
+  -- the repo root, handed to diffview as -C so <CR> diffs this repo even if the
+  -- cwd moved since (autochdir); git's own error says why when it fails (e.g.
+  -- "detected dubious ownership" on a network share: safe.directory)
+  local is_repo, toplevel, git_err = utils.git(config.git_cmd, { 'rev-parse', '--show-toplevel' })
+  if not is_repo then
+    log.error('does not seem to be a valid git repo (cwd: ' .. vim.fn.getcwd() .. ')\n' .. vim.trim(git_err))
     return
   end
+  local root = vim.trim(toplevel)
 
   -- reuse or create buffer
   do
@@ -84,7 +89,7 @@ function M.draw(config, options, args)
   end
 
   utils.apply_buffer_options(buf)
-  utils.apply_buffer_mappings(buf, M.graph, config.hooks)
+  utils.apply_buffer_mappings(buf, M.graph, config.hooks, root)
   local dur = os.clock() - start
   log.info('rest dur:', dur * 1000, 'ms')
 

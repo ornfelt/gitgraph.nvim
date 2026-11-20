@@ -23,30 +23,35 @@ function M.git_log_pretty(args, date_format)
     args.revision_range = nil
   end
 
-  local cli = config.git_cmd .. [[ log %s %s --pretty="%s" --date="%s" %s %s --date-order]]
-
+  -- an argv list, run without a shell (see utils.git); an empty string drops the arg
   local cli_args = {
+    'log',
     args.revision_range or '', -- revision range
     args.all and '--all' or '', -- all branches?
     -- 'format:%s%x00(%D)%x00%ad%x00%an%x00%H%x00%P', -- format makes it easy to extract info
-    'format:%s%x00(%D)%x00%ad%x00%an%x00%h%x00%p', -- format makes it easy to extract info
-    'format:' .. date_format, -- date format
+    '--pretty=format:%s%x00(%D)%x00%ad%x00%an%x00%h%x00%p', -- format makes it easy to extract info
+    '--date=format:' .. date_format, -- date format
     args.max_count and ('--max-count=%d'):format(args.max_count) or '', -- max count
     args.skip and ('--skip=%d'):format(args.skip) or '', -- skip
+    '--date-order',
   }
 
-  local git_cmd = (cli):format(unpack(cli_args))
-
-  local io_handle = io.popen(git_cmd)
-  if not io_handle then
-    log.error('FATAL: no io handle to git_cmd result')
-    return {}
+  local git_args = {}
+  for i, arg in ipairs(cli_args) do
+    -- the range was spliced into a shell line before, so "a b" meant two revs
+    local parts = i == 2 and vim.split(arg, '%s+', { trimempty = true }) or { arg }
+    for _, part in ipairs(parts) do
+      if part ~= '' then
+        git_args[#git_args + 1] = part
+      end
+    end
   end
 
-  ---@type string
-  local git_cmd_out = io_handle:read('*a')
-
-  io_handle:close()
+  local ok, git_cmd_out, git_err = require('gitgraph.utils').git(config.git_cmd, git_args)
+  if not ok then
+    log.error('git log failed: ' .. vim.trim(git_err))
+    return {}
+  end
 
   ---@type I.RawCommit[]
   local data = {}
